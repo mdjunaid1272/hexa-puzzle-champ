@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Hex Cascade</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M16 6h32l16 26-16 26H16L0 32z' fill='%23ffb81c'/%3E%3Cpath d='M20 14h24l12 18-12 18H20L8 32z' fill='%23e81d20'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <!-- Ambient backdrop: only visible in the empty space beside the portrait column on wide screens. -->
+  <div id="ambient" aria-hidden="true">
+    <i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><i class="blob b4"></i>
+    <i class="hexfloat f1"></i><i class="hexfloat f2"></i><i class="hexfloat f3"></i><i class="hexfloat f4"></i>
+    <i class="hexfloat f5"></i><i class="hexfloat f6"></i><i class="hexfloat f7"></i><i class="hexfloat f8"></i>
+  </div>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="hud" class="hidden">
+      <!-- topHUD: progress+coins row. Normal flow (not position:absolute),
+           so it sits a fixed GAP from the top regardless of screen size —
+           no hardcoded "top: 96px"-style offset needed. -->
+      <div class="hud-top">
+        <div class="top-bar">
+          <div class="progress-pill">
+            <div class="hex-icon"></div>
+            <div class="progress-track">
+              <div id="progress-fill" class="progress-fill"></div>
+              <div class="progress-label"><span id="progress-text">0 / 30</span></div>
+            </div>
+          </div>
+          <div class="coin-pill">
+            <div class="coin-icon"></div>
+            <span id="coin-value">0</span>
+          </div>
+          <div class="settings-wrap">
+            <button id="btn-settings" class="settings-btn" title="Settings">
+              <img src="img/buttons/setting-button.png" alt="Settings" />
+            </button>
+            <div id="settings-panel" class="settings-panel hidden">
+              <button id="btn-replay" class="settings-panel-btn" title="Restart level">
+                <img src="img/buttons/restart-button.png" alt="Restart" />
+              </button>
+              <button id="btn-sound-toggle" class="settings-panel-btn" title="Mute">
+                <img id="sound-icon" src="img/buttons/sound-on-button.png" alt="Sound" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="combo-row">
+        <div id="combo-badge" class="combo-badge hidden">COMBO x1</div>
+        <div id="hint-pill" class="hint-pill hidden" role="status"></div>
+      </div>
+
+      <div id="popup-layer"></div>
+
+      <!-- powerupHUD: a flow child pinned to the bottom via margin-top:auto
+           (see .booster-dock) instead of absolute top/bottom math, so it can
+           never overlap hud-top above it, at any screen size. -->
+      <div class="booster-dock">
+        <button id="btn-rocket" class="booster-btn" title="Rocket: clear a stack">
+          <img class="booster-icon" src="img/power%20icons/1st-Roket-Destroy-icon.png" alt="" />
+          <span class="booster-count" id="rocket-count">2</span>
+        </button>
+        <button id="btn-shuffle" class="booster-btn" title="Shuffle: get a new hand">
+          <img class="booster-icon" src="img/power%20icons/refresh-button.png" alt="" />
+          <span class="booster-count" id="shuffle-count">2</span>
+        </button>
+        <button id="btn-mini-rocket" class="booster-btn" title="Mini Rocket: clear a cell + its 2 nearest neighbors">
+          <img class="booster-icon" src="img/power%20icons/2nd-Roket-Destroy-icon.png" alt="" />
+          <span class="booster-count" id="mini-rocket-count">2</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="overlay-splash" class="overlay splash">
+      <button id="btn-splash-sound" class="splash-sound-btn" title="Sound" aria-label="Sound">
+        <img id="splash-sound-icon" src="img/buttons/sound-on-button.png" alt="" />
+      </button>
+      <div class="splash-panel">
+        <div class="splash-logo">
+          <img src="img/splash/game-logo.png" alt="Hexa Puzzle Champ" />
+        </div>
+        <button id="btn-splash-play" class="play-image-btn">
+          <img src="img/buttons/play-button.png" alt="Play" />
+        </button>
+        <div id="splash-stats" class="splash-stats hidden">
+          <div class="splash-stat"><span id="splash-levels">0</span><label>Levels Cleared</label></div>
+          <div class="splash-stat"><span id="splash-coins">0</span><label>Coins</label></div>
+        </div>
+        <button id="btn-splash-reset" class="text-link-btn">&#8635; Reset Level</button>
+      </div>
+    </div>
+
+    <div id="overlay-reset-confirm" class="overlay hidden">
+      <div class="panel">
+        <h1>Reset Level?</h1>
+        <p class="fail-sub">This takes you back to Level 1. Coins and boosters you've earned are kept.</p>
+        <button id="btn-reset-confirm" class="primary danger">Reset to Level 1</button>
+        <p class="hint-text"><a href="#" id="btn-reset-cancel">Cancel</a></p>
+      </div>
+    </div>
+
+    <!-- The four boards below use full painted artwork (img/UI board). The
+         art already contains its title, buttons and sample numbers, so each
+         live value sits on a small colour-matched patch over the painted one,
+         and each painted button gets an invisible click area on top. All
+         positions are percentages of the artwork, so they track it at any size. -->
+    <div id="overlay-level-intro" class="overlay hidden">
+      <div class="board-panel board-start">
+        <img class="board-art" src="img/UI%20board/level-start-UI.png" alt="Level goal" />
+        <p id="level-intro-number" class="board-text board-level" style="left:36.5%;top:9.6%;width:27.5%;height:6.2%;--patch:linear-gradient(90deg,#641ed7,#6f27e4)">Level 1</p>
+        <span id="level-intro-target" class="board-text board-number" style="left:50.5%;top:46%;width:22%;height:14.6%;--patch:linear-gradient(90deg,#ecd8f2,#dccbfa)">50</span>
+        <button id="btn-level-intro-continue" class="board-hit" style="left:15%;top:69%;width:70%;height:18.5%" aria-label="Start"></button>
+      </div>
+    </div>
+
+    <div id="overlay-victory" class="overlay hidden">
+      <div class="board-panel board-victory">
+        <img class="board-art" src="img/UI%20board/level-victory-UI.png" alt="Victory" />
+        <p id="victory-level" class="board-text board-level" style="left:38.3%;top:15.2%;width:24%;height:5.6%;--patch:#6914ce">Level 1</p>
+        <span id="victory-coins" class="board-text board-number board-reward" style="left:46.5%;top:50.8%;width:23%;height:12%;--patch:linear-gradient(90deg,#fdf0cf,#fde0a8)">+30</span>
+        <button id="btn-next-level" class="board-hit" style="left:16%;top:70%;width:68.5%;height:17.5%" aria-label="Next level"></button>
+      </div>
+    </div>
+
+    <div id="overlay-fail" class="overlay hidden">
+      <div class="board-panel board-fail">
+        <img class="board-art" src="img/UI%20board/no-moves-left-UI.png" alt="No moves left" />
+        <p id="fail-level" class="board-text board-level" style="left:39%;top:5.6%;width:21.5%;height:4.9%;--patch:linear-gradient(90deg,#7412e0,#640fce)">Level 1</p>
+        <span id="fail-remaining" class="board-text board-number board-number-sm" style="left:49%;top:47.6%;width:18.5%;height:9.8%;--patch:linear-gradient(90deg,#dedcfc,#d2d1fb)">0</span>
+        <button id="btn-retry-level" class="board-hit" style="left:8.8%;top:70.3%;width:39.3%;height:15.5%" aria-label="Retry"></button>
+        <button id="btn-play-on" class="board-hit" style="left:50.3%;top:70.3%;width:40.8%;height:15.5%" aria-label="Play on"></button>
+        <button id="btn-fail-close" class="board-hit board-hit-round" style="left:83.5%;top:9.3%;width:10%;height:10%" aria-label="Close"></button>
+      </div>
+    </div>
+
+    <!-- Last in the list so it always sits above every other board and can always be dismissed. -->
+    <div id="overlay-pause" class="overlay hidden">
+      <div class="board-panel board-pause">
+        <img class="board-art" src="img/UI%20board/pause-board-UI.png" alt="Paused" />
+        <button id="btn-resume" class="board-hit" style="left:23%;top:43.3%;width:54.2%;height:20.3%" aria-label="Resume"></button>
+        <a href="#" id="btn-main-menu" class="board-hit" style="left:25.5%;top:68%;width:49%;height:16%" aria-label="Main menu"></a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

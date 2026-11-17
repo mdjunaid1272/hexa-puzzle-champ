@@ -1,0 +1,1095 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #223154;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Letterbox colour around the portrait column on wide (desktop) screens. */
+  background: #14233f;
+}
+
+/* ---- Ambient backdrop (the empty space beside the portrait column) ----
+   Slow shifting gradient in the game's block colours, soft drifting glows and
+   translucent hexagons floating upward. */
+#ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(120deg, #14233f, #1d5fa8, #3ab0e8, #9b6bff, #ff4fa3, #ffc93c, #4bd97e, #3ab0e8, #14233f);
+  background-size: 400% 400%;
+  animation: ambient-shift 40s ease-in-out infinite;
+}
+
+#ambient::after {
+  /* Vignette keeps the focus on the game column. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(20, 35, 63, 0) 25%, rgba(20, 35, 63, 0.55) 100%);
+}
+
+.blob {
+  position: absolute;
+  width: 46vmax;
+  height: 46vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.blob.b1 { background: #ff4fa3; left: -12vmax; top: -10vmax; animation: drift-a 26s ease-in-out infinite; }
+.blob.b2 { background: #3ab0e8; right: -14vmax; top: 8vh; animation: drift-b 32s ease-in-out infinite; }
+.blob.b3 { background: #ffc93c; left: 6vw; bottom: -18vmax; animation: drift-b 29s ease-in-out infinite reverse; }
+.blob.b4 { background: #9b6bff; right: 2vw; bottom: -14vmax; animation: drift-a 35s ease-in-out infinite reverse; }
+
+.hexfloat {
+  position: absolute;
+  bottom: -20vmin;
+  width: 9vmin;
+  height: 10.4vmin;
+  background: rgba(255, 255, 255, 0.16);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  will-change: transform, opacity;
+  animation: hex-rise 24s linear infinite;
+}
+.hexfloat.f1 { left: 4%;  animation-duration: 26s; animation-delay: -2s; }
+.hexfloat.f2 { left: 12%; animation-duration: 34s; animation-delay: -14s; width: 5vmin; height: 5.8vmin; }
+.hexfloat.f3 { left: 22%; animation-duration: 29s; animation-delay: -8s;  width: 12vmin; height: 13.9vmin; background: rgba(255, 201, 60, 0.18); }
+.hexfloat.f4 { left: 33%; animation-duration: 38s; animation-delay: -22s; width: 6vmin; height: 7vmin; }
+.hexfloat.f5 { left: 62%; animation-duration: 31s; animation-delay: -5s;  width: 7vmin; height: 8.1vmin; background: rgba(255, 79, 163, 0.2); }
+.hexfloat.f6 { left: 74%; animation-duration: 36s; animation-delay: -18s; width: 11vmin; height: 12.7vmin; }
+.hexfloat.f7 { left: 85%; animation-duration: 27s; animation-delay: -11s; width: 5vmin; height: 5.8vmin; background: rgba(75, 217, 126, 0.22); }
+.hexfloat.f8 { left: 93%; animation-duration: 33s; animation-delay: -26s; width: 8vmin; height: 9.2vmin; }
+
+@keyframes ambient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(14vw, 12vh) scale(1.15); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1.1); }
+  50% { transform: translate(-12vw, -10vh) scale(0.9); }
+}
+@keyframes hex-rise {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-135vh) rotate(180deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #ambient, .blob, .hexfloat { animation: none; }
+}
+
+/* Portrait game column: full screen on phones, a centered 9:16 column on
+   desktop/landscape windows. */
+#app {
+  z-index: 1;
+  box-shadow: 0 0 60px rgba(10, 20, 45, 0.55);
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: 100%;
+  overflow: hidden;
+  background: #3fa9e0 url('../img/background.png') center center / cover no-repeat;
+}
+
+/* UI scales with the column width (--ui-scale is set from Game.onResize) so
+   buttons and text stay proportionate on large desktop windows. */
+#app > :not(canvas) {
+  zoom: var(--ui-scale, 1);
+}
+
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+:root {
+  /* One consistent spacing scale for the whole HUD, in place of one-off
+     magic-number margins/paddings scattered per element. */
+  --sp-1: 8px;
+  --sp-2: 12px;
+  --sp-3: 16px;
+  --sp-4: 20px;
+  --sp-5: 24px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+/* topHUD: the progress/coins row and the control-button row below it, kept
+   in normal document flow (not position:absolute) so the control row is
+   always exactly one gap below the progress row, and the board effectively
+   starts right after wherever this block's real height ends — no
+   hardcoded "top: 96px"-style offset to keep in sync by hand. */
+.hud-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: calc(var(--sp-3) + var(--safe-top)) calc(var(--sp-3) + var(--safe-right)) 0 calc(var(--sp-3) + var(--safe-left));
+}
+
+/* Three-column grid (not a plain flex row) so the progress pill sits at
+   TRUE top-middle regardless of the coin pill's width — a flex row with
+   just two items would push the progress pill off-center toward whichever
+   side is empty. The coin pill lives in column 1 (top-left); column 3 is
+   an empty mirror of it, so the center column is centered against the
+   FULL bar width. */
+.top-bar {
+  display: grid;
+  /* minmax(0, 1fr), not plain 1fr: a bare "1fr" track has an implicit
+     content-based minimum, so the coin pill's own width was pulling column
+     3 wider than the empty column 1, throwing the "centered" column 2 off
+     by 10-15px toward the left. minmax(0, ...) makes both side columns
+     purely proportional, so they stay genuinely equal. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+  pointer-events: none;
+}
+
+.progress-pill {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: none;
+  border-radius: 999px;
+  padding: 7px 16px 7px 0;
+  box-shadow: none;
+  width: min(240px, 62vw);
+}
+
+.hex-icon {
+  flex: none;
+  background: conic-gradient(from 0deg, #ffc93c, #ff8a3d, #ff4fa3, #9b6bff, #3ab0e8, #4bd97e, #ffc93c);
+  clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+}
+
+/* Overrides the shared .hex-icon's CSS conic-gradient/clip-path with the
+ * uploaded artwork — its own hex shape and gloss are baked into the image,
+ * so no clip-path is needed here (unlike the base .hex-icon rule other
+ * contexts, e.g. the level-intro goal icon, still use unchanged). */
+.progress-pill .hex-icon {
+  width: 48px;
+  height: 48px;
+  /* Bigger than the 32px bar: negative vertical margins let it overhang the
+     bar above and below instead of making the whole pill taller. */
+  margin-block: -8px;
+  /* Both this icon and the track background are rounded/pointed shapes
+     baked into their own artwork with a bit of transparent margin, so
+     flush (gap: 0) still left a visible sliver between them — pull the
+     track left, under the icon, to close it. z-index keeps the icon
+     painting on top of the overlapped area. */
+  margin-right: -18px;
+  position: relative;
+  z-index: 1;
+  background: url('../img/Progress Bar/color-hexagon-icon.png') center / contain no-repeat;
+  clip-path: none;
+}
+
+/* background-size: auto 100% (not 100% 100%) — scales the source art by
+   height only, preserving its own aspect ratio instead of stretching it
+   non-uniformly to fit the bar's width. The bar's height (32px) is chosen
+   so the art's OWN natural width at that scale (~195px) lands almost
+   exactly on this pill's actual rendered width, so a single, non-repeated,
+   non-distorted copy covers it with no visible tiling seam and no stretch
+   in either direction. */
+.progress-track {
+  position: relative;
+  flex: 1;
+  min-width: 28px;
+  height: 32px;
+  background: url('../img/Progress Bar/loading-patch-bg.png') left center / auto 100% no-repeat;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: url('../img/Progress Bar/green-loading-bar.png') left center / auto 100% no-repeat;
+  border-radius: 999px;
+  transition: width 0.35s ease-out;
+}
+
+.progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #2b3a55;
+  letter-spacing: 0.02em;
+}
+
+/* Coin counter: img/coin-Ui.png is a complete pill (coin + a sample "30"),
+   1836x856 with transparent margins. The art's visible pill is x 99..1692,
+   y 57..801, so background-size/position map exactly that area onto the
+   element (no empty margin). The live number sits over the painted "30" on
+   a cream patch that matches the pill's inside. */
+.coin-pill {
+  grid-column: 1;
+  justify-self: start;
+  position: relative;
+  width: 86px;
+  height: 40px;
+  background: url('../img/coin-Ui.png') 40.7% 50.9% / 115.3% 115.1% no-repeat;
+  filter: drop-shadow(0 5px 8px rgba(120, 70, 0, 0.3));
+  flex: none;
+  white-space: nowrap;
+}
+
+.coin-pill::before {
+  content: '';
+  position: absolute;
+  left: 44.5%;
+  top: 17%;
+  width: 43%;
+  height: 66%;
+  background: linear-gradient(180deg, #fdf3e6, #fcecd9);
+  border-radius: 30%;
+}
+
+.coin-pill #coin-value {
+  position: absolute;
+  left: 44%;
+  width: 44%;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Fredoka', 'Segoe UI', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #9a4208;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* The coin is part of the artwork now. */
+.coin-pill .coin-icon {
+  display: none;
+}
+
+/* Mirrors .coin-pill's grid-column 1 / justify-self: start on the other
+   side of the (otherwise empty) column 3 — top-bar's minmax(0, 1fr) side
+   columns stay purely proportional regardless of content, so adding this
+   here doesn't skew the progress-pill's centering in column 2. Positioned
+   (not static) so the dropdown panel below can anchor to IT specifically,
+   rather than to the whole top-bar. */
+.settings-wrap {
+  grid-column: 3;
+  justify-self: end;
+  position: relative;
+  pointer-events: auto;
+}
+
+.settings-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  flex: none;
+}
+
+.settings-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+/* Dropdown revealed by the settings gear — anchored to .settings-wrap (not
+   the button itself) so it's unaffected by the button's own :active scale.
+   Hidden via opacity/transform (not display:none) so the open/close is an
+   actual slide-and-fade transition rather than an instant cut. */
+.settings-panel {
+  position: absolute;
+  top: calc(100% + var(--sp-1));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+}
+
+.settings-panel.hidden {
+  display: flex !important; /* override the global .hidden{display:none} — animate out instead of vanishing */
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+.settings-panel-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  flex: none;
+  filter: drop-shadow(0 4px 10px rgba(20, 60, 90, 0.25));
+}
+
+.settings-panel-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.settings-panel-btn:active {
+  transform: scale(0.93);
+}
+
+.combo-badge {
+  align-self: center;
+  background: linear-gradient(135deg, #ff4fa3, #ffc93c);
+  padding: 7px 20px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(255, 79, 163, 0.4);
+  transform: scale(1);
+  transition: transform 0.15s ease-out;
+}
+
+/* Flow child directly below hud-top (not position:absolute with a
+   hand-tuned "top" offset) — it naturally sits right under the control row
+   however tall that row ends up being, and takes no vertical space at all
+   while the badge itself is hidden. */
+.combo-row {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--sp-2);
+  pointer-events: none;
+}
+
+/* One short line that says what the next tap will do while a booster is armed. */
+.hint-pill {
+  background: rgba(20, 20, 70, 0.72);
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(10, 10, 50, 0.35);
+  animation: hint-in 0.18s ease-out both;
+}
+
+@keyframes hint-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint-pill { animation: none; }
+}
+
+#popup-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.floating-popup {
+  position: absolute;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+}
+
+/* Points from a chained clear: bigger and golden so a combo reads at a glance. */
+.floating-popup.combo-pop {
+  font-size: 28px;
+  color: #ffe36b;
+  text-shadow: 0 3px 0 rgba(160, 60, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.ghost-badge {
+  color: #223154;
+  text-shadow: none;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 12px !important;
+}
+
+/* powerupHUD: shuffle / rocket / mini-rocket. A normal flow child, pushed to
+   the very bottom of #hud by its own margin-top:auto (which consumes all
+   remaining space above it) instead of absolute top/bottom pixel math —
+   this guarantees it can never overlap hud-top above it at any screen
+   size. align-self:flex-end hugs the right edge (desktop/landscape/tablet
+   column layout); the mobile-portrait media query below switches it to a
+   centered horizontal row instead. */
+.booster-dock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: flex-end;
+  gap: var(--sp-3);
+  margin-top: auto;
+  /* Viewport-relative (not a flat --sp-4) so the safe margin above the
+     bottom edge stays proportionate to screen height — a fixed 20px reads
+     as a healthy ~5-8% gap on a typical phone but shrinks to under 2% on a
+     1080x1920 screen; clamp() keeps it in a sensible range at both ends. */
+  padding: 0 calc(var(--sp-3) + var(--safe-right)) calc(clamp(8px, 2vh, 20px) + var(--safe-bottom)) 0;
+  pointer-events: auto;
+}
+
+.booster-btn {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.booster-btn:active {
+  transform: scale(0.93);
+}
+
+.booster-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.booster-btn.armed {
+  outline: 3px solid #ff4fa3;
+  outline-offset: 2px;
+}
+
+.booster-icon {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.booster-count {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ff4fa3;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 40, 70, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 20;
+}
+
+.panel {
+  background: #ffffff;
+  border-radius: 26px;
+  padding: 34px 30px;
+  text-align: center;
+  width: min(380px, 88vw);
+  box-shadow: 0 24px 60px rgba(15, 40, 70, 0.35);
+  color: #223154;
+}
+
+/* ---- Painted UI boards (pause / level start / victory / no moves left) ----
+   The panel is just the artwork; live text and click areas are positioned
+   over it in percentages. container-type lets the text size follow the
+   artwork's width (cqw units) so it stays in proportion at any size. */
+.board-panel {
+  position: relative;
+  width: min(350px, 92%);
+  container-type: inline-size;
+  filter: drop-shadow(0 18px 34px rgba(15, 30, 70, 0.4));
+  animation: board-pop 0.28s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+.board-pause {
+  width: min(380px, 96%);
+}
+
+@keyframes board-pop {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.board-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* Live text sitting on a colour-matched patch that hides the sample value
+   painted into the artwork. The patch fades out at its edges so it blends
+   into the art instead of showing as a box. */
+.board-text {
+  position: absolute;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  font-family: 'Fredoka', 'Baloo 2', 'Segoe UI', system-ui, sans-serif;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 1;
+}
+
+.board-text::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--patch);
+  inset: -4% -8%;
+  border-radius: 40% / 50%;
+  -webkit-mask-image: radial-gradient(closest-side, #000 90%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 90%, transparent 100%);
+}
+
+.board-level {
+  color: #fff;
+  font-size: 5.6cqw;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-shadow: 0 0.5cqw 0 rgba(40, 10, 110, 0.55);
+}
+
+.board-level::before {
+  inset: 0;
+  border-radius: 999px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.board-number {
+  color: #3a1c9a;
+  font-size: 11.5cqw;
+  -webkit-text-stroke: 1.5cqw #fff;
+  paint-order: stroke fill;
+}
+
+.board-number-sm {
+  font-size: 9.5cqw;
+}
+
+.board-reward {
+  color: #5a2d0c;
+  -webkit-text-stroke: 0;
+}
+
+/* Invisible click area over a button painted into the artwork. */
+.board-hit {
+  position: absolute;
+  display: block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0;
+  color: transparent;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s ease;
+}
+
+.board-hit-round {
+  border-radius: 50%;
+}
+
+.board-hit:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.board-hit:active {
+  background: rgba(0, 0, 40, 0.14);
+}
+
+.board-hit:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* PLAY ON already spent this level: greyed out and not clickable. */
+.board-hit.used {
+  background: rgba(60, 60, 80, 0.55);
+  cursor: default;
+  pointer-events: none;
+}
+
+.panel h1 {
+  margin: 0 0 6px;
+  font-size: 30px;
+  font-weight: 800;
+  background: linear-gradient(90deg, #ff4fa3, #ffc93c, #4bd97e, #3ab0e8, #9b6bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tagline {
+  opacity: 0.6;
+  margin: 0 0 22px;
+  font-size: 14px;
+}
+
+.level-intro-number {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #9b6bff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.victory-ribbon {
+  margin: 4px 0 18px;
+  padding: 12px 26px;
+  background: linear-gradient(135deg, #b06bff, #9b6bff);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(155, 107, 255, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ribbon-sparkle {
+  font-size: 18px;
+}
+
+.reward-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #223154;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.level-intro-panel {
+  padding-top: 40px;
+}
+
+.level-intro-goal-label {
+  margin: 4px 0 18px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #223154;
+  opacity: 0.7;
+  letter-spacing: 0.06em;
+}
+
+.level-intro-goal-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #f2f4f8;
+  border-radius: 16px;
+  padding: 18px;
+  margin: 0 0 26px;
+  font-weight: 800;
+  font-size: 26px;
+  color: #223154;
+}
+
+.level-intro-goal-icon .hex-icon {
+  width: 34px;
+  height: 34px;
+}
+
+button.primary {
+  background: linear-gradient(135deg, #3ab0e8, #4bd97e);
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  font-size: 17px;
+  padding: 14px 0;
+  width: 100%;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(58, 176, 232, 0.4);
+}
+
+button.primary:active {
+  transform: scale(0.97);
+}
+
+button.primary.danger {
+  background: linear-gradient(135deg, #ff6b6b, #ff4fa3);
+  box-shadow: 0 10px 22px rgba(255, 79, 163, 0.4);
+}
+
+.text-link-btn {
+  background: none;
+  border: none;
+  color: #6b7a94;
+  font-weight: 700;
+  font-size: 13px;
+  opacity: 0.75;
+  cursor: pointer;
+  padding: 8px;
+  margin-top: 14px;
+}
+
+.text-link-btn:active {
+  opacity: 1;
+}
+
+.hint-text {
+  margin-top: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  opacity: 0.6;
+}
+
+.hint-text a {
+  color: #3ab0e8;
+  font-weight: 700;
+}
+
+.reward-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff7e6;
+  border-radius: 16px;
+  padding: 14px;
+  margin: 6px 0 22px;
+  font-weight: 800;
+  font-size: 20px;
+  color: #a9700f;
+}
+
+.reward-row .coin-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe9a8, #ffc93c 60%, #e39b1c);
+  box-shadow: inset 0 -2px 3px rgba(150, 90, 0, 0.4);
+}
+
+.overlay.splash {
+  /* Full-bleed painted start screen (img/splash/splash-bg.png, 9:16 like the
+     game column). The colour behind it only shows if the image is slow. */
+  background: #2a2fc4 url('../img/splash/splash-bg.png') center / cover no-repeat;
+  backdrop-filter: none;
+}
+
+/* Sound toggle in the top-right corner of the start screen. */
+.splash-sound-btn {
+  position: absolute;
+  top: calc(var(--sp-3) + var(--safe-top));
+  right: calc(var(--sp-3) + var(--safe-right));
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 10px rgba(20, 20, 70, 0.35));
+  z-index: 3;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.splash-sound-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.splash-sound-btn:active {
+  transform: scale(0.93);
+}
+
+/* Logo at the top, board artwork in the middle (part of the background),
+   Play button + stats pinned toward the bottom. */
+.splash-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: min(400px, 90%);
+  height: 100%;
+  padding-top: calc(7% + var(--safe-top));
+  padding-bottom: calc(9% + var(--safe-bottom));
+}
+
+/* game-logo.png has wide transparent margins with faint glow specks outside
+   the logo itself. The frame crops to the logo's own area (x 486..1686 of
+   2176, with a little room for its glow) and the image is scaled up inside
+   it, so the logo fills the frame and the specks are cut off. */
+.splash-logo {
+  width: min(92%, 380px);
+  aspect-ratio: 1262 / 723;
+  overflow: hidden;
+  flex: none;
+  animation: logo-drop 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  filter: drop-shadow(0 10px 22px rgba(20, 10, 80, 0.45));
+}
+
+.splash-logo img {
+  display: block;
+  width: 172.4%;
+  max-width: none;
+  margin-left: -36.2%;
+  height: auto;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+@keyframes logo-drop {
+  from { transform: translateY(-24px) scale(0.92); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* The Reset link sits on the dark purple part of the background. */
+.splash-panel .text-link-btn {
+  color: #fff;
+  opacity: 0.85;
+  text-shadow: 0 1px 6px rgba(20, 10, 80, 0.6);
+}
+
+/* Pushes the Play button and everything under it to the bottom of the screen. */
+.splash-panel .play-image-btn {
+  margin-top: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo { animation: none; }
+}
+
+/* Splash's Play button: the uploaded artwork is a full pill-shaped button
+ * (its own background, shape and "Play" label baked in), so this just sizes
+ * and positions the image — no background/padding/border-radius of its own
+ * the way the old text button needed, since the art already provides all of
+ * that. Sized by HEIGHT (not width) to match the old text button's actual
+ * footprint: the artwork's own canvas is much shorter/wider (~1.7:1) than
+ * the old pill was, so matching WIDTH instead would render it roughly 2.4x
+ * taller than the old button ever was. Width is left to follow the image's
+ * natural aspect ratio at that height. */
+.play-image-btn {
+  /* New green pill artwork is 2.4:1 and fills its whole image, so 82px tall
+     gives a ~200px wide button. */
+  height: 82px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 12px 24px rgba(10, 60, 20, 0.45)) drop-shadow(0 0 18px rgba(150, 255, 60, 0.35));
+  animation: play-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes play-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-image-btn { animation: none; }
+}
+
+.play-image-btn img {
+  height: 100%;
+  width: auto;
+  display: block;
+  pointer-events: none;
+  /* play-button.png is saved with a solid black background instead of
+     transparency, so the art is clipped to its own pill outline (a fully
+     rounded rectangle, nudged in a hair to drop the dark anti-aliased rim). */
+  clip-path: inset(1.5% 0.8% round 999px);
+}
+
+.play-image-btn:active {
+  animation: none;
+  transform: scale(0.95);
+}
+
+.splash-stats {
+  display: flex;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.splash-stat {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  padding: 10px 20px;
+  box-shadow: 0 6px 16px rgba(20, 60, 90, 0.15);
+}
+
+.splash-stat span {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  color: #223154;
+  font-variant-numeric: tabular-nums;
+}
+
+.splash-stat label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7a94;
+  margin-top: 2px;
+}
+
+.fail-sub {
+  margin: 0 0 22px;
+  font-size: 14px;
+  opacity: 0.65;
+  line-height: 1.5;
+}
+
+/* Narrow phones (~320-380px wide): the progress pill and coin pill no
+   longer compete with the control row for width (that row moved to its
+   own line below), but the two top pills can still get tight together on
+   the very narrowest phones — trim their padding/icon/font size a touch. */
+@media (max-width: 380px) {
+  .coin-pill {
+    width: 74px;
+    height: 34px;
+  }
+
+  .coin-pill #coin-value {
+    font-size: 14px;
+  }
+
+  .progress-pill {
+    padding: 6px 12px 6px 6px;
+    gap: var(--sp-1);
+  }
+
+  .progress-pill .hex-icon {
+    width: 32px;
+    height: 32px;
+    margin-block: -6px;
+  }
+
+  .progress-label {
+    font-size: 9px;
+  }
+}
+
+/* Mobile portrait: the powerup dock switches from the right-edge vertical
+   stack to a horizontal row centered at the bottom, clear of the hand tray
+   above it and the screen edges either side. Scoped to portrait so
+   landscape phones/tablets/desktop keep the right-side dock. */
+/* The game is always a portrait column now, so the horizontal dock applies at
+   every window size. */
+@media all {
+  .booster-dock {
+    flex-direction: row;
+    align-self: stretch;
+    justify-content: center;
+    gap: var(--sp-4);
+    padding-left: calc(var(--sp-3) + var(--safe-left));
+  }
+}
+
+/* Short viewports (landscape phones, especially with browser chrome eating
+   vertical space): trims powerup button sizes and gaps so the dock stays
+   comfortably compact rather than feeling cramped. */
+@media (max-height: 420px) {
+  .hud-top {
+    gap: var(--sp-1);
+  }
+
+  .booster-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .booster-dock {
+    gap: var(--sp-1);
+    padding-bottom: calc(var(--sp-2) + var(--safe-bottom));
+  }
+}
