@@ -159,6 +159,8 @@ export class UIManager {
     // only its accessible name changes on the last level.
     this.btnNextLevel.setAttribute('aria-label', isLastLevel ? 'Back to menu' : 'Next level');
     this.overlayVictory.classList.remove('hidden');
+    this.burstConfetti();
+    setTimeout(() => this.burstConfetti(40), 380); // a second, smaller wave
   }
 
   /** "No moves left" board: shows the level, how many blocks were still
@@ -174,14 +176,49 @@ export class UIManager {
     this.overlayFail.classList.add('hidden');
   }
 
+  /** Restarts a one-shot CSS animation class, even if it is already playing. */
+  private replayClass(el: HTMLElement, cls: string): void {
+    el.classList.remove(cls);
+    void el.offsetWidth; // force a reflow so the animation starts over
+    el.classList.add(cls);
+  }
+
+  private shownProgress = -1;
+
   setProgress(current: number, target: number): void {
     const pct = Math.min(100, (current / target) * 100);
     this.progressFill.style.width = `${pct}%`;
     this.progressText.textContent = `${current} / ${target}`;
+    // The bar pulses whenever it grows, but not on a reset or a new level.
+    if (current > this.shownProgress && this.shownProgress >= 0) {
+      this.replayClass(this.progressFill.parentElement as HTMLElement, 'bump');
+    }
+    this.shownProgress = current;
   }
 
+  private shownCoins: number | null = null;
+  private coinRaf = 0;
+
+  /** Coins count up to their new value instead of jumping, and the pill pops. */
   setCoins(value: number): void {
-    this.coinValue.textContent = String(value);
+    const from = this.shownCoins;
+    this.shownCoins = value;
+    cancelAnimationFrame(this.coinRaf);
+    if (from === null || value <= from) {
+      this.coinValue.textContent = String(value);
+      return;
+    }
+    const pill = this.coinValue.parentElement as HTMLElement;
+    this.replayClass(pill, 'bump');
+    const start = performance.now();
+    const duration = Math.min(900, 250 + (value - from) * 6);
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      this.coinValue.textContent = String(Math.round(from + (value - from) * eased));
+      if (t < 1) this.coinRaf = requestAnimationFrame(step);
+    };
+    this.coinRaf = requestAnimationFrame(step);
   }
 
   setCombo(comboStep: number | null): void {
@@ -191,16 +228,44 @@ export class UIManager {
     }
     this.comboBadge.classList.remove('hidden');
     this.comboBadge.textContent = `COMBO x${comboStep}`;
-    this.comboBadge.style.transform = 'scale(1.15)';
-    requestAnimationFrame(() => {
-      this.comboBadge.style.transform = 'scale(1)';
-    });
+    this.replayClass(this.comboBadge, 'pop');
+  }
+
+  /** A quick bright wipe, used when a new level starts or the menu returns. */
+  flash(): void {
+    const el = document.getElementById('fx-flash');
+    if (el) this.replayClass(el, 'go');
+  }
+
+  /** A burst of coloured paper from the upper middle of the screen. */
+  burstConfetti(count = 70): void {
+    const layer = document.getElementById('confetti-layer');
+    if (!layer || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const palette = ['#f8b41c', '#1e93e8', '#e81d20', '#f186af', '#5bbd42', '#f46718', '#743a8c', '#2bd7d2'];
+    for (let i = 0; i < count; i++) {
+      const piece = document.createElement('i');
+      piece.className = 'confetti-piece';
+      const angle = (Math.random() - 0.5) * Math.PI * 1.1; // spread upward and sideways
+      const speed = 140 + Math.random() * 260;
+      piece.style.background = palette[i % palette.length];
+      piece.style.setProperty('--dx', `${Math.sin(angle) * speed * 1.4}px`);
+      piece.style.setProperty('--dy', `${-Math.cos(angle) * speed * 0.35 + 260 + Math.random() * 280}px`);
+      piece.style.setProperty('--rot', `${(Math.random() - 0.5) * 1440}deg`);
+      piece.style.setProperty('--dur', `${1.5 + Math.random() * 1.1}s`);
+      piece.style.setProperty('--delay', `${Math.random() * 0.25}s`);
+      layer.appendChild(piece);
+      setTimeout(() => piece.remove(), 3200);
+    }
   }
 
   setBoosterCharges(shuffle: number, rocket: number, miniRocket: number): void {
+    const prev = [this.shuffleCount.textContent, this.rocketCount.textContent, this.miniRocketCount.textContent];
     this.shuffleCount.textContent = String(shuffle);
     this.rocketCount.textContent = String(rocket);
     this.miniRocketCount.textContent = String(miniRocket);
+    [this.shuffleCount, this.rocketCount, this.miniRocketCount].forEach((el, i) => {
+      if (prev[i] !== el.textContent && prev[i] !== '' && prev[i] !== null) this.replayClass(el, 'pop');
+    });
     this.btnShuffle.disabled = shuffle <= 0;
     this.btnRocket.disabled = rocket <= 0;
     this.btnMiniRocket.disabled = miniRocket <= 0;

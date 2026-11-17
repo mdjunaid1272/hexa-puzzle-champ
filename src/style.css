@@ -1093,3 +1093,283 @@ button.primary.danger {
     padding-bottom: calc(var(--sp-2) + var(--safe-bottom));
   }
 }
+
+
+/* ==========================================================================
+   MOTION: transitions and small animations that give the UI some life.
+   Everything here is decoration. It is switched off for people who ask their
+   system for reduced motion (see the media query at the end of this section).
+   ========================================================================== */
+
+/* Screen changes: the backdrop fades in and every panel springs up. */
+.overlay:not(.hidden) {
+  animation: overlay-fade 0.28s ease-out both;
+}
+
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* A bouncier entrance than the plain pop, with a tiny upward settle. */
+@keyframes board-pop {
+  0% { transform: translateY(26px) scale(0.78); opacity: 0; }
+  60% { transform: translateY(-5px) scale(1.04); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* The fail board drops in from above and settles with a small wobble. */
+#overlay-fail:not(.hidden) .board-panel {
+  animation: board-drop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes board-drop {
+  0% { transform: translateY(-60px) rotate(-3deg) scale(0.9); opacity: 0; }
+  55% { transform: translateY(8px) rotate(1.5deg) scale(1.01); opacity: 1; }
+  80% { transform: translateY(-3px) rotate(-0.6deg); }
+  100% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+}
+
+/* The reward number on the victory board pops in after the board lands. */
+#overlay-victory:not(.hidden) #victory-coins {
+  animation: reward-pop 0.55s 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+#overlay-victory:not(.hidden) #btn-next-level {
+  animation: cta-pulse 1.4s 0.9s ease-in-out infinite;
+}
+
+@keyframes reward-pop {
+  0% { transform: scale(0.2); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* A soft pulsing glow behind a call-to-action hit area. */
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); transform: scale(1); }
+  50% { box-shadow: 0 0 22px 6px rgba(255, 255, 255, 0.35); transform: scale(1.025); }
+}
+
+#overlay-level-intro:not(.hidden) #btn-level-intro-continue {
+  animation: cta-pulse 1.4s 0.7s ease-in-out infinite;
+}
+
+/* The level goal number pops in just after the board arrives. */
+#overlay-level-intro:not(.hidden) #level-intro-target {
+  animation: reward-pop 0.5s 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+/* HUD: the top bar slides down and the booster buttons spring up in turn. */
+#hud:not(.hidden) .hud-top {
+  animation: hud-down 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hud-down {
+  from { transform: translateY(-40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+#hud:not(.hidden) .booster-btn {
+  animation: booster-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) backwards;
+}
+
+#hud:not(.hidden) .booster-btn:nth-child(1) { animation-delay: 0.15s; }
+#hud:not(.hidden) .booster-btn:nth-child(2) { animation-delay: 0.25s; }
+#hud:not(.hidden) .booster-btn:nth-child(3) { animation-delay: 0.35s; }
+
+@keyframes booster-in {
+  from { transform: translateY(40px) scale(0.5); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Buttons feel springy: they lift on hover and squash when pressed. */
+.booster-btn,
+.settings-btn,
+.settings-panel-btn,
+.splash-sound-btn,
+.play-image-btn {
+  transition: transform 0.16s cubic-bezier(0.3, 1.6, 0.5, 1), filter 0.16s ease-out;
+}
+
+@media (hover: hover) {
+  .booster-btn:not(:disabled):hover,
+  .settings-btn:hover,
+  .settings-panel-btn:hover,
+  .splash-sound-btn:hover {
+    transform: translateY(-3px) scale(1.08);
+    filter: brightness(1.08);
+  }
+
+  .play-image-btn:hover {
+    transform: scale(1.06);
+    filter: brightness(1.06);
+  }
+}
+
+.booster-btn:not(:disabled):active,
+.settings-btn:active,
+.splash-sound-btn:active,
+.play-image-btn:active {
+  transform: scale(0.9);
+}
+
+/* An armed booster breathes so it is obvious it is waiting for a tap. */
+#hud:not(.hidden) .booster-btn.armed {
+  animation: armed-breathe 0.9s ease-in-out infinite;
+}
+
+@keyframes armed-breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 79, 163, 0.55); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 79, 163, 0); }
+}
+
+/* Small pops whenever a number changes. */
+.booster-count.pop,
+.coin-pill.bump {
+  animation: count-pop 0.38s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* Combo badge: a bigger bounce plus a wobble each time the combo grows. */
+.combo-badge.pop {
+  animation: combo-bounce 0.45s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+
+@keyframes combo-bounce {
+  0% { transform: scale(0.6) rotate(-6deg); }
+  45% { transform: scale(1.25) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* Progress bar: the fill glides, gleams, and the whole bar pulses when it grows. */
+.progress-fill {
+  transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: bar-shine 2.4s linear infinite;
+  mix-blend-mode: soft-light;
+}
+
+@keyframes bar-shine {
+  from { background-position: 200% 0; }
+  to { background-position: -100% 0; }
+}
+
+.progress-track.bump {
+  animation: bar-bump 0.4s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes bar-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.06, 1.18); }
+  100% { transform: scale(1); }
+}
+
+/* The hint pill bobs gently while it is on screen. */
+.hint-pill {
+  animation: hint-in 0.2s ease-out both, hint-bob 2s 0.2s ease-in-out infinite;
+}
+
+@keyframes hint-bob {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -3px; }
+}
+
+/* Splash screen: the logo floats and the stats fade up. */
+.splash-logo {
+  animation: logo-drop 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) both, logo-float 4s 0.8s ease-in-out infinite;
+}
+
+@keyframes logo-float {
+  0%, 100% { translate: 0 0; rotate: 0deg; }
+  50% { translate: 0 -8px; rotate: -0.8deg; }
+}
+
+.splash-stats:not(.hidden) {
+  animation: stat-rise 0.6s 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes stat-rise {
+  from { transform: translateY(18px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Screen flash used between levels: a quick bright wipe that fades away. */
+#fx-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.95), rgba(190, 225, 255, 0.85));
+}
+
+#fx-flash.go {
+  animation: flash-fade 0.55s ease-out;
+}
+
+@keyframes flash-fade {
+  0% { opacity: 0.95; }
+  100% { opacity: 0; }
+}
+
+/* Confetti: each piece flies out from the upper middle and tumbles down. */
+#confetti-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: confetti-fly var(--dur, 1.8s) cubic-bezier(0.15, 0.6, 0.35, 1) var(--delay, 0s) forwards;
+}
+
+@keyframes confetti-fly {
+  0% { transform: translate(0, 0) rotate(0) scale(0.4); opacity: 1; }
+  25% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay:not(.hidden),
+  .board-panel,
+  #overlay-fail:not(.hidden) .board-panel,
+  #overlay-victory:not(.hidden) #victory-coins,
+  #overlay-victory:not(.hidden) #btn-next-level,
+  #overlay-level-intro:not(.hidden) #btn-level-intro-continue,
+  #overlay-level-intro:not(.hidden) #level-intro-target,
+  #hud:not(.hidden) .hud-top,
+  #hud:not(.hidden) .booster-btn,
+  #hud:not(.hidden) .booster-btn.armed,
+  .booster-count.pop,
+  .coin-pill.bump,
+  .combo-badge.pop,
+  .progress-fill::after,
+  .progress-track.bump,
+  .splash-logo,
+  .splash-stats:not(.hidden),
+  #fx-flash.go {
+    animation: none;
+  }
+  .confetti-piece { display: none; }
+}

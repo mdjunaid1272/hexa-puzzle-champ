@@ -151,6 +151,8 @@ export class Game {
     this.input.setGrid(this.state.grid);
     this.renderStartingStacks();
 
+    this.ui.flash();
+    this.popBoardIn();
     this.ui.setProgress(0, this.state.levelManager.def.target);
     this.ui.setCoins(this.state.levelManager.coins);
     this.ui.setCombo(null);
@@ -200,15 +202,59 @@ export class Game {
    * for every board rotation, so it turns in place around its own center. */
   private updateBoardPlacement(): void {
     // Runs every frame, so it reuses two vectors instead of allocating.
+    // Uses the board's live scale (not the final one) so it stays centred while it pops in.
     const c = this.tmpCenter.set(this.boardCenter.x, 0, this.boardCenter.y);
-    c.multiplyScalar(this.boardScale).applyAxisAngle(Y_AXIS, this.boardRoot.rotation.y);
+    c.multiplyScalar(this.boardRoot.scale.x).applyAxisAngle(Y_AXIS, this.boardRoot.rotation.y);
     this.boardRoot.position.set(-c.x, 0, -c.z);
+  }
+
+  /** The whole board springs up from a smaller size when a level starts. */
+  private popBoardIn(): void {
+    const target = this.boardScale;
+    const start = target * 0.55;
+    this.boardRoot.scale.setScalar(start);
+    const finish = (): void => {
+      this.boardRoot.scale.setScalar(target);
+    };
+    this.animationManager.add(560, (t) => this.boardRoot.scale.setScalar(start + (target - start) * t), Easing.easeOutBack, finish, finish);
+  }
+
+  /** A short celebration on the board itself when the level is won. */
+  private celebrateBoard(): void {
+    const base = this.boardScale;
+    const finish = (): void => {
+      this.boardRoot.scale.setScalar(base);
+    };
+    this.animationManager.add(
+      620,
+      (t) => this.boardRoot.scale.setScalar(base * (1 + Math.sin(t * Math.PI) * 0.07)),
+      Easing.easeOutQuad,
+      finish,
+      finish
+    );
+    this.effects.screenShake(0.1, 260);
   }
 
   private dismissLevelIntro(): void {
     this.introOpen = false;
     this.ui.hideLevelIntro();
-    if (this.state.status === GameStatus.PLAYING) this.settleBoard();
+    if (this.state.status !== GameStatus.PLAYING) return;
+    // Pre-placed stacks drop onto the board one after another, then settle any merges.
+    const groups = [...this.stackGroups.values()];
+    const STAGGER_MS = 55;
+    const DROP_MS = 380;
+    groups.forEach((group, i) => {
+      group.position.y = 6;
+      this.animationManager.after(i * STAGGER_MS, () => {
+        const from = new THREE.Vector3(group.position.x, 6, group.position.z);
+        const to = new THREE.Vector3(group.position.x, 0, group.position.z);
+        this.animationManager.animateMove(group, from, to, DROP_MS, Easing.easeOutBack);
+      });
+    });
+    const total = groups.length > 0 ? (groups.length - 1) * STAGGER_MS + DROP_MS : 0;
+    this.animationManager.after(total + 60, () => {
+      if (this.state.status === GameStatus.PLAYING) this.settleBoard();
+    });
   }
 
   /** Instantiates meshes for any stacks a level defines as already on the
@@ -310,7 +356,10 @@ export class Game {
       group.scale.set(0.01, 0.01, 0.01);
       this.sceneManager.scene.add(group);
       this.handGroups[slot] = group;
-      this.animationManager.animateScale(group, new THREE.Vector3(0.01, 0.01, 0.01), new THREE.Vector3(this.boardScale, this.boardScale, this.boardScale), 220, Easing.easeOutBack);
+      // Pieces pop in one after another, each with a little overshoot.
+      const small = new THREE.Vector3(0.01, 0.01, 0.01);
+      const full = new THREE.Vector3(this.boardScale, this.boardScale, this.boardScale);
+      this.animationManager.after(slot * 90, () => this.animationManager.animateScale(group, small, full, 320, Easing.easeOutBack));
     });
     this.updateInputTargets();
   }
@@ -381,7 +430,20 @@ export class Game {
 
       const targetPos = new THREE.Vector3(0, (baseLayer + i) * LAYER_PITCH + BLOCK_HEIGHT / 2, 0);
       const isLast = i === children.length - 1;
-      this.animationManager.animateDrop(child, from, targetPos, TIMING.drop, isLast ? () => this.resolveFrom(candidate.q, candidate.r) : undefined);
+      this.animationManager.animateDrop(
+        child,
+        from,
+        targetPos,
+        TIMING.drop,
+        isLast
+          ? () => {
+              // A puff of the piece's top colour where it lands, then the merges begin.
+              const land = this.state.grid.coordinateToWorld(candidate.q, candidate.r, baseLayer + children.length - 1, LAYER_PITCH);
+              this.effects.landingPuff(new THREE.Vector3(land.x, land.y + BLOCK_HEIGHT, land.z), COLORS[piece[piece.length - 1].color]);
+              this.resolveFrom(candidate.q, candidate.r);
+            }
+          : undefined
+      );
     });
 
     this.sceneManager.scene.remove(group);
@@ -590,6 +652,7 @@ export class Game {
     const reward = this.state.completeLevel();
     this.ui.setCoins(this.state.levelManager.coins);
     this.audio.combo(4);
+    this.celebrateBoard();
     this.ui.showVictory(this.state.levelManager.levelIndex + 1, reward, this.state.levelManager.isLastLevel);
   }
 
@@ -618,6 +681,7 @@ export class Game {
     this.boardRenderer = null;
     this.ui.hidePaused();
     this.ui.hideFail();
+    this.ui.flash();
     this.ui.showSplash(this.state.levelManager.unlockedLevelIndex, this.state.levelManager.coins);
   }
 
@@ -840,6 +904,18 @@ export class Game {
     this.cameraManager.applyFraming(width / height);
   };
 
+  /** Pieces waiting in the tray float gently up and down, each on its own beat.
+   * A piece that is being dragged or sent back is away from its slot, so it is left alone. */
+  private bobHand(): void {
+    const t = performance.now() / 1000;
+    this.handGroups.forEach((group, slot) => {
+      if (!group) return;
+      const home = TRAY_SLOTS[slot];
+      if (Math.abs(group.position.x - home.x) > 0.02 || Math.abs(group.position.z - home.z) > 0.02) return;
+      group.position.y = home.y + Math.sin(t * 2.2 + slot * 1.7) * 0.07;
+    });
+  }
+
   private loop = (): void => {
     const dt = this.clock.tick();
     if (this.state.status !== GameStatus.PAUSED) {
@@ -853,6 +929,7 @@ export class Game {
       this.input.update(dt); // smooth boardRoot.rotation.y toward the drag target
       this.preview.tick(dt); // keeps the drop preview's pulse moving while the pointer is still
     }
+    this.bobHand();
     this.updateBoardPlacement();
     this.boardRenderer?.updateLabels(this.cameraManager.camera, this.canvas);
     this.sceneManager.renderer.render(this.sceneManager.scene, this.cameraManager.camera);
