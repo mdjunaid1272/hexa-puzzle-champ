@@ -73,6 +73,17 @@ describe('block transfers', () => {
   });
 });
 
+describe('full stacks', () => {
+  it('a full stack still takes the tile that completes its top run, then clears', () => {
+    const grid = emptyGrid();
+    put(grid, 0, 0, [1, 1, 1, 1, 1, 2, 0, 0, 0, 0]); // full (10), top run of 4
+    put(grid, 1, 0, [2, 0]); // matching single tile: the 5th tile completes the run
+    const events = resolveBoard(grid, 0, 0);
+    expect(events.some((e) => e.type === 'clear' && e.q === 0 && e.r === 0)).toBe(true);
+    for (const c of grid.allCells()) expect(c.stack.length).toBeLessThanOrEqual(MAX_STACK_HEIGHT);
+  });
+});
+
 describe('multiple matching neighbours', () => {
   it('absorbs the smallest matching group first, then the next', () => {
     const grid = emptyGrid();
@@ -229,7 +240,8 @@ describe('transfer reversal prevention', () => {
           // flow goes from the smaller (or equal) top group into the larger, and never into a full stack
           // (the one exception: a FULL stack with the bigger group hands a tile to its smaller neighbour)
           if (topRunLength(donor) > topRunLength(receiver)) expect(donor.stack.length).toBe(MAX_STACK_HEIGHT);
-          expect(receiver.stack.length).toBeLessThan(MAX_STACK_HEIGHT);
+          // (a full stack only takes a tile that completes its run, which clears at once)
+          if (receiver.stack.length >= MAX_STACK_HEIGHT) expect(topRunLength(receiver) + 1).toBeGreaterThanOrEqual(COMPLETION_THRESHOLD);
           receiver.stack.push(donor.stack.pop()!);
         } else {
           const cell = replay.getCell(e.q, e.r)!;

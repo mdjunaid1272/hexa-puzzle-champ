@@ -82,6 +82,12 @@ export function topRunLength(cell: Cell): number {
 const MAX_EVENTS = 4000;
 const MAX_STEPS = 40000;
 
+/** A stack takes another tile if it has room, or — even when full — if that
+ * tile completes its top run (it clears at once, so the overflow never lingers). */
+function canReceive(cell: Cell): boolean {
+  return cell.stack.length < MAX_STACK_HEIGHT || topRunLength(cell) + 1 >= COMPLETION_THRESHOLD;
+}
+
 interface Move {
   donor: Cell;
   receiver: Cell;
@@ -141,12 +147,12 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
       if (other.stack[other.stack.length - 1].color !== topColor) continue;
       const otherRun = topRunLength(other);
 
-      if (otherRun <= myRun && cell.stack.length < MAX_STACK_HEIGHT) {
+      if (otherRun <= myRun && canReceive(cell)) {
         // This cell holds the bigger group (or ties and is the cell being
         // resolved), so it absorbs the neighbour's top tile.
         if (!absorb || otherRun < absorb.run) absorb = { move: { donor: other, receiver: cell }, run: otherRun };
       }
-      if (otherRun >= myRun && other.stack.length < MAX_STACK_HEIGHT) {
+      if (otherRun >= myRun && canReceive(other)) {
         // The neighbour holds the bigger group (or ties), so this cell can give
         // its top tile to it. Absorbing is preferred, so on an exact tie this is
         // only used when this cell itself is full.
@@ -154,8 +160,8 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
       }
       if (!blocked) {
         let candidate: Move | null = null;
-        if (otherRun < myRun && other.stack.length < MAX_STACK_HEIGHT) candidate = { donor: cell, receiver: other, fallback: true };
-        else if (otherRun > myRun && cell.stack.length < MAX_STACK_HEIGHT) candidate = { donor: other, receiver: cell, fallback: true };
+        if (otherRun < myRun && canReceive(other)) candidate = { donor: cell, receiver: other, fallback: true };
+        else if (otherRun > myRun && canReceive(cell)) candidate = { donor: other, receiver: cell, fallback: true };
         if (candidate && !usedFallback.has(fallbackKey(candidate))) blocked = candidate;
       }
     }
@@ -212,6 +218,7 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
           ids: removed.map((b) => b.id),
           baseLayer
         });
+        usedFallback.clear(); // the board changed for good (tiles left it), so earlier fallbacks may apply again
         enqueue(cell.q, cell.r); // clearing may expose a new top — re-check it fresh next dequeue
       }
       break;
