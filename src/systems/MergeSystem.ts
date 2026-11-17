@@ -15,8 +15,9 @@
 //     tile, one tile at a time (so the player sees every tile move).
 //   * If both runs are equal, the cell currently being resolved (the stack the
 //     player just placed, or one that just changed) is the receiver.
-//   * A receiver already at MAX_STACK_HEIGHT cannot take a tile; nothing moves
-//     (the pair simply stays as it is).
+//   * A receiver already at MAX_STACK_HEIGHT cannot take a tile, so in that one
+//     case the tile flows the other way (full stack -> smaller neighbour); the
+//     pair is never left sitting with matching tops while a move exists.
 //
 // Why this cannot loop or bounce a tile back and forth: every transfer moves a
 // tile from a group of size d to a group of size r with r >= d. Afterwards the
@@ -84,6 +85,7 @@ const MAX_STEPS = 40000;
 interface Move {
   donor: Cell;
   receiver: Cell;
+  fallback?: boolean;
 }
 
 /**
@@ -100,6 +102,11 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
   const events: ResolveEvent[] = [];
   const queue: AxialCoord[] = [];
   const queued = new Set<string>();
+  // Full-stack fallback moves already made, as "donor>receiver". Each directed
+  // pair may use the fallback once per resolve, which is what guarantees two
+  // nearly full stacks can never pass tiles back and forth forever.
+  const usedFallback = new Set<string>();
+  const fallbackKey = (m: Move): string => `${cellKey(m.donor.q, m.donor.r)}>${cellKey(m.receiver.q, m.receiver.r)}`;
 
   const enqueue = (q: number, r: number): void => {
     const key = cellKey(q, r);
@@ -123,6 +130,10 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
     const myRun = topRunLength(cell);
     let absorb: { move: Move; run: number } | null = null;
     let give: { move: Move; run: number } | null = null;
+    // Only used when the normal direction is blocked because the larger group's
+    // stack is full (MAX_STACK_HEIGHT): the tile then flows the other way
+    // rather than leaving two matching neighbours sitting unmerged.
+    let blocked: Move | null = null;
 
     for (const n of grid.getNeighbors(cell.q, cell.r)) {
       const other = grid.getCell(n.q, n.r);
@@ -141,8 +152,14 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
         // only used when this cell itself is full.
         if (!give || otherRun > give.run) give = { move: { donor: cell, receiver: other }, run: otherRun };
       }
+      if (!blocked) {
+        let candidate: Move | null = null;
+        if (otherRun < myRun && other.stack.length < MAX_STACK_HEIGHT) candidate = { donor: cell, receiver: other, fallback: true };
+        else if (otherRun > myRun && cell.stack.length < MAX_STACK_HEIGHT) candidate = { donor: other, receiver: cell, fallback: true };
+        if (candidate && !usedFallback.has(fallbackKey(candidate))) blocked = candidate;
+      }
     }
-    return absorb ? absorb.move : give ? give.move : null;
+    return absorb ? absorb.move : give ? give.move : blocked;
   };
 
   let steps = 0;
@@ -160,6 +177,7 @@ export function resolveBoard(grid: HexGrid, originQ?: number, originR?: number):
       const move = pickMove(cell);
       if (move) {
         const { donor, receiver } = move;
+        if (move.fallback) usedFallback.add(fallbackKey(move));
         const fromLayer = donor.stack.length - 1;
         const block = donor.stack.pop() as Cell['stack'][number];
         const toLayer = receiver.stack.length;

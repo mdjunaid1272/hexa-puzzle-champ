@@ -62,13 +62,14 @@ describe('block transfers', () => {
     expect(events[0]).toMatchObject({ fromLayer: 1, toLayer: 4, toQ: 0, toR: 0 });
   });
 
-  it('never moves a tile into a full stack', () => {
+  it('never moves a tile into a full stack; the tile flows the other way instead of staying unmerged', () => {
     const grid = emptyGrid();
     put(grid, 0, 0, [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]); // full (10), top group 2
     put(grid, 1, 0, [1, 0]); // would give its tile to the bigger group, but that is full
     const events = resolveBoard(grid, 1, 0);
-    expect(transfers(events)).toHaveLength(0);
-    expect(grid.getCell(0, 0)!.stack).toHaveLength(MAX_STACK_HEIGHT);
+    expect(transfers(events).length).toBeGreaterThan(0);
+    expect(transfers(events)[0]).toMatchObject({ fromQ: 0, fromR: 0, toQ: 1, toR: 0 });
+    for (const c of grid.allCells()) expect(c.stack.length).toBeLessThanOrEqual(MAX_STACK_HEIGHT);
   });
 });
 
@@ -226,7 +227,8 @@ describe('transfer reversal prevention', () => {
           expect(e.fromLayer).toBe(donor.stack.length - 1);
           expect(e.toLayer).toBe(receiver.stack.length);
           // flow goes from the smaller (or equal) top group into the larger, and never into a full stack
-          expect(topRunLength(donor)).toBeLessThanOrEqual(topRunLength(receiver));
+          // (the one exception: a FULL stack with the bigger group hands a tile to its smaller neighbour)
+          if (topRunLength(donor) > topRunLength(receiver)) expect(donor.stack.length).toBe(MAX_STACK_HEIGHT);
           expect(receiver.stack.length).toBeLessThan(MAX_STACK_HEIGHT);
           receiver.stack.push(donor.stack.pop()!);
         } else {
@@ -254,7 +256,7 @@ describe('transfer reversal prevention', () => {
       for (const e of transfers(resolveBoard(grid))) moves.set(e.id, (moves.get(e.id) ?? 0) + 1);
       for (const count of moves.values()) worst = Math.max(worst, count);
     }
-    expect(worst).toBeLessThanOrEqual(6); // the old bug moved one tile 500 times
+    expect(worst).toBeLessThanOrEqual(10); // the old bug moved one tile 500 times
   });
 
   it('crowded, tall boards always settle: no safety-limit warning and few moves per tile', () => {
